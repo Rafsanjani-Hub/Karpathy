@@ -1,0 +1,186 @@
+##### → Import Packages:
+import numpy as np
+
+
+##### → Design a Data Structure for a node (`Value`) 
+class Value:
+    def __init__(self, data, _children = [], _operation = '', label = ''):
+        # These fundamental information for a node.
+        self.data = data
+        self.grad = 0.0                # It is initialized to 0.0.
+        self.velocity = 0.0            # [Optional] It is initialized to 0.0 for Momemtum Updates.
+        self.label = label             # It is initialized to empty string.
+
+        # These variables are generated for computational graph.
+        self._children  = _children    # It is initialized to an empty list, which traces children of a node.
+        self._operation = _operation   # It is initialized to an empty string.
+        self._backward  = lambda:None  # It is initialized to an empty function.
+    #end-def
+
+    def __repr__(self):
+        return f'Value(data={self.data:0.4f}, grad={self.grad}, label={self.label})'
+    #end-def
+
+    def __add__(self, other):
+        # assert isinstance(other, (Value, int, float)), 'Data Type should be Value, integer, or float.'
+        other = Value(data=other) if isinstance(other, (int, float)) else other
+
+        output = Value(self.data + other.data, _children=[self, other], _operation='+')
+    
+        def _backward():
+            self.grad  += 1.0 * output.grad
+            other.grad += 1.0 * output.grad
+        #end-def
+        output._backward = _backward
+
+        return output
+    #end-def
+
+    def __radd__(self, other):
+        return self+other
+    #end-def
+
+    def __neg__(self):
+        return self * (-1.0)
+    #end-def
+
+    def __sub__(self, other):
+        return self + (-other)
+    #end
+
+    def __rsub__(self, other):
+        return (-self) + other
+    #end-def
+
+    def __mul__(self, other):
+        # assert isinstance(other, (Value, int, float)), 'Data Type should be Value, integer, or float.'
+        other = Value(data=other) if isinstance(other, (int, float)) else other
+
+        output = Value(self.data * other.data, _children=[self, other], _operation='*')
+    
+        def _backward():
+            self.grad  += other.data * output.grad
+            other.grad += self.data  * output.grad
+        #end-def
+        output._backward = _backward
+
+        return output
+    #end-def
+
+    def __rmul__(self, other):
+        return self * other
+    #end-def
+
+    def __pow__(self, other):
+        # assert isinstance(other, (int, float)), 'Data Type expects interger and float.'
+        other = Value(data=other) if isinstance(other, (int, float)) else other
+
+        output = Value(data=self.data ** other.data, _children=[self, other], _operation=f'{self.data}^{other.data}')
+    
+        def _backward():
+            self.grad  += (other.data * (self.data ** (other.data - 1.0)))  * output.grad
+        #end-def
+        output._backward = _backward
+
+        return output
+    #end-de
+
+    def __rpow__(self, other):
+        other = Value(data=other) if isinstance(other, (int, float)) else other
+
+        return other ** self
+    #end-def
+
+    def __truediv__(self, other):
+        # other = Value(data=other) if isinstance(other, (int, float)) else other
+        return self * (other ** (-1.0))
+    #end-def
+
+    def __rtruediv__(self, other):
+        return (self ** -1.0) * other
+    #end-def
+
+    def tanh(self):
+        x = self.data
+
+        output = Value(data=np.tanh(x), _children=[self], _operation=f'tanh({self.data:0.2f})')
+    
+        def _backward():
+            self.grad  += (1.0 - (output.data**2.0)) * output.grad
+        #end-def
+        output._backward = _backward
+
+        return output
+    #end-def
+
+    def relu(self):
+        x = self.data
+
+        output = Value(data=(x if x>0 else 0), _children=[self], _operation=f'relu({self.data:0.2f})')
+    
+        def _backward():
+            self.grad  += (1.0 if x>0 else 0) * output.grad
+        #end-def
+        output._backward = _backward
+
+        return output
+    #end-def
+
+    def sigmoid(self):
+        x = self.data
+
+        output = Value(data=(1.0/(1.0 + np.exp(-x))), _children=[self], _operation=f'σ({self.data:0.2f})')
+    
+        def _backward():
+            self.grad  += (output.data * (1.0 - output.data)) * output.grad
+        #end-def
+        output._backward = _backward
+
+        return output
+    #end-def
+
+    def log(self):
+        x = self.data
+
+        output = Value(data=np.log(x), _children=[self], _operation=f'logₑ({self.data:0.2f})')
+    
+        def _backward():
+            self.grad  += (1.0 / x) * output.grad
+        #end-def
+        output._backward = _backward
+
+        return output
+    #end-def
+
+    def exp(self):
+        output = Value(data=np.exp(self.data), _children=[self], _operation=f'exp({self.data:0.2f})')
+    
+        def _backward():
+            self.grad  += output.data * output.grad
+        #end-def
+        output._backward = _backward
+
+        return output
+    #end-def
+    
+    def backward(self):
+        visited_nodes = []
+        ordered_nodes = []
+
+        def build_topology(node):
+            if node not in visited_nodes:
+                visited_nodes.append(node)
+                for child in node._children:
+                    build_topology(child)
+                #end-for
+                ordered_nodes.append(node)
+            #end-if/else
+        #end-def
+        build_topology(self)
+
+        self.grad = 1.0
+        for node in reversed(ordered_nodes):
+            node._backward()
+        #end-for
+    #end-def
+#end-class
